@@ -1,0 +1,17 @@
+In file included from ../engine/hash.h:22:0,
+                 from ../engine/problem.h:22,
+                 from ../engine/dispatcher.h:22,
+                 from main.cc:5:
+../engine/utils.h: In function ‘double Utils::my_read_time_in_milli_seconds()’:
+../engine/utils.h:51:9: warning: unused variable ‘i’ [-Wunused-variable]
+     int i; 
+         ^
+main.cc: In function ‘int main(int, const char**)’:
+main.cc:41:9: warning: variable ‘h’ set but not used [-Wunused-but-set-variable]
+     int h = 0;
+         ^
+In file included from main.cc:6:0:
+navigation.h: In member function ‘std::pair<int, int> state_t::direction(Problem::action_t) const’:
+navigation.h:48:5: warning: control reaches end of non-void function [-Wreturn-type]
+     }
+     ^
