@@ -129,7 +129,7 @@ class problem_t : public Problem::problem_t<state_t> {
         return terminal(s) ? 0 : costs_[s.tack(a)];
     }
 
-    virtual float calculate_transition(const state_t s1, const state_t s2,Problem::action_t a) const {
+  virtual float calculate_transition(const state_t s1, const state_t s2,Problem::action_t a) const {
         return wind_transition_[s1.wind_ * 8 + s2.wind_];
     }
 
