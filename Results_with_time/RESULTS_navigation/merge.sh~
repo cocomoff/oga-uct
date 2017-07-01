@@ -1,6 +1,0 @@
-cd $1
-for n in 30 60 100 200 300 400 500 600 700 800 900 1000
-do
-	echo $n $(grep -n "uct(random" res30 | awk '{print $2}') $(grep -n "uct(random" res30 | awk '{print $3}') $(grep -n "uct(random" res30 | awk '{print $5}') >> $2
-done
-cd ../

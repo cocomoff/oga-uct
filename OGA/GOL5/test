@@ -1,7 +1,0 @@
-seed1=0
-#trials=1: 0{-1021.0}(-1021.0)
-uct(random,width=150,depth=50,par=1)= -1021.00000 -nan ( 0.53 secs 100 decisions)
-stats: policy=uct(width=150,horizon=50,par=1,random-ties=false)
-stats: decisions=100
-stats: policy=random()
-stats: decisions=727958
