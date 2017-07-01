@@ -120,14 +120,66 @@ public:
     outcomes.push_back(std::make_pair(next_s, 1.0));
   }
   virtual void print(std::ostream &os) const { }
+
+  virtual float calculate_transition(const state_t s1,
+                                     const state_t s2,
+                                     Problem::action_t a) const {
+    auto x1 = s1.x_;
+    auto y1 = s1.y_;
+    auto x2 = s2.x_;
+    auto y2 = s2.y_;
+
+    if (a == 0) {
+      if (x1 == x2 && y1 + 1 == y2) {
+        return 1.0;
+      } else {
+        return 0.0;
+      }
+    } else if (a == 1) {
+      if (x1 + 1 == x2 && y1 == y2) {
+        return 1.0;
+      } else {
+        return 0.0;
+      }
+    } else if (a == 2) {
+      if (x1 == x2 && y1 - 1 == y2) {
+        return 1.0;
+      } else {
+        return 0.0;
+      }
+    } else if (a == 3) {
+      if (x1 - 1== x2 && y1 == y2) {
+        return 1.0;
+      } else {
+        return 0.0;
+      }
+    } else {
+      return 0.0;
+    }
+  }
+
+  virtual void sample_factored( const state_t &s, Problem::action_t a,
+                                state_t &next_state) const {
+    std::vector<std::pair<state_t, float>> outcomes;
+    next(s, a, outcomes);
+
+    float r = Random::real();
+
+    for(int i = 0; i < outcomes.size(); ++i) {
+      if(r <= outcomes[i].second) {
+        next_state = outcomes[i].first;
+        break;
+      } else {
+        r = r - outcomes[i].second;
+      }
+    }
+  }
 };
 
 inline std::ostream& operator<<(std::ostream &os, const problem_t &p) {
   p.print(os);
   return os;
 }
-
-#if 0 // NOTE: REMOVE
 
 class scaled_heuristic_t : public Heuristic::heuristic_t<state_t> {
   const Heuristic::heuristic_t<state_t> *h_;
@@ -159,5 +211,3 @@ public:
   virtual void dump(std::ostream &os) const { }
   float operator()(const state_t &s) const { return value(s); }
 };
-
-#endif
