@@ -581,13 +581,12 @@ namespace Online {
             orderedMap.insert(std::make_pair(it->first,it->second));
           }
 
-          /*
-           all nodes are sorted by 'depth'
+          // all nodes are sorted by 'depth'
+          cout << "  [orderedMap]" << endl;
           for (auto kv : orderedMap) {
             auto tn = kv.first;
             cout << "   " << tn.first << "," << tn.second << endl;
           }
-          */
           
           typename std::map <tree_node_,std::vector<tree_node_> >::reverse_iterator rgit;
           typename std::map <state_action_pair_,std::vector<state_action_pair_>>::iterator action_map_it;
@@ -600,6 +599,8 @@ namespace Online {
             
             unsigned currentDepth=(rit->first).first;
             T currentState=(rit->first).second;
+
+            cout << "DEPTH:" << currentDepth << " state " << currentState << endl;
             
             if (currentDepth != oldDepth) {
               oldDepth = currentDepth;
@@ -681,6 +682,7 @@ namespace Online {
 
 	// get the sum of elements of vector
         int getTotalCount(const T &s, unsigned depth, const std::vector<int>& count_array ) const{
+          cout << "[getTotalCount]" << endl;
           int sum_of_elems=0;
           int nactions = problem().number_actions(s);
           typename hash_t<T>::iterator it;
@@ -693,13 +695,18 @@ namespace Online {
               if(invIt!=inverse_SA_.end()) {
                 typename std::map<state_action_pair_,std::pair<int,float>> ::iterator data_it;
                 data_it=SA_abstract_data_.find(invIt->second);
-                        
+                cout << "  - [App] d " << depth
+                     << " state " << s << " action " << a << "  data: " << data_it->second.first << endl;
                 sum_of_elems += data_it->second.first;
               } else {
+                cout << "  - [App] d " << depth
+                     << " state " << s << " action " << a << " count: " << count_array[1+a] << endl;
                 sum_of_elems += count_array[1+a];
               }
             }
           }
+
+          cout << "[End of getTotalCount=" << sum_of_elems << "]" << endl;
           return sum_of_elems;
 
         }
@@ -868,16 +875,10 @@ namespace Online {
                                         bool random_ties) const {
        
         
-          float log_ns=logf(getTotalCount(state, depth, data.counts_));
-        
-          std::vector<Problem::action_t> best_actions;
-        
+          
           float best_value = std::numeric_limits<float>::max();
           int nactions = problem().number_actions(state);
-          best_actions.reserve(random_ties ? nactions : 1);
-
-          bool exists_unexplored = false;
-
+          // bool exists_unexplored = false;
 
           // Unexplored nodes
           for (Problem::action_t a = 0; a < nactions; ++a) {
@@ -887,6 +888,10 @@ namespace Online {
               }
             }
           }
+
+          float log_ns=logf(getTotalCount(state, depth, data.counts_));
+          std::vector<Problem::action_t> best_actions;
+          best_actions.reserve(random_ties ? nactions : 1);
 
           for (Problem::action_t a = 0; a < nactions; ++a ) {
             if( problem().applicable(state, a) ) {
@@ -905,7 +910,7 @@ namespace Online {
               */
               // compute score of action adding bonus (if applicable)
               // Code_ Modified SAU
-              assert(getTotalCount(state, depth, data.counts_)>0);
+              // assert(getTotalCount(state, depth, data.counts_)>0);
               int masterCount;
               float masterValue;
 
