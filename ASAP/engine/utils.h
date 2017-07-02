@@ -47,7 +47,6 @@ inline double read_time_in_seconds() {
 
 inline double my_read_time_in_milli_seconds() {
     struct timespec start;
-    int i; 
     double time_in_milli_sec;
     /* measure monotonic time */ 
     clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start);
