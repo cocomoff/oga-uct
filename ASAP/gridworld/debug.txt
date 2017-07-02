@@ -1,0 +1,187 @@
+seed=0
+M0
+
+
+Begin 0-th Search Tree
+ insert (2,2) in tree w/ value=4.524381
+Begin 1-th Search Tree
+ count=-1 fetch 0.00000 a=0 next=(2,3)
+ insert (2,3) in tree w/ value=3.70987
+Begin 2-th Search Tree
+ count=0 fetch 0.00000 a=1 next=(3,2)
+ insert (3,2) in tree w/ value=3.70987
+Begin 3-th Search Tree
+ count=1 fetch 0.00000 a=2 next=(2,1)
+ insert (2,1) in tree w/ value=3.70987
+Begin 4-th Search Tree
+ count=2 fetch 0.00000 a=3 next=(1,2)
+ insert (1,2) in tree w/ value=2.85250
+Begin 5-th Search Tree
+ count=3 fetch 3.70987 a=3 next=(1,2)
+ count=-1 fetch 0.00000 a=0 next=(1,3)
+ insert (1,3) in tree w/ value=2.85250
+Begin 6-th Search Tree
+ count=4 fetch 4.11713 a=3 next=(1,2)
+ count=0 fetch 0.00000 a=1 next=(2,2)
+ insert (2,2) in tree w/ value=1.95000
+Begin 7-th Search Tree
+ count=5 fetch 3.98138 a=3 next=(1,2)
+ count=1 fetch 0.00000 a=2 next=(1,1)
+ insert (1,1) in tree w/ value=2.85250
+Begin 8-th Search Tree
+ count=6 fetch 4.11713 a=3 next=(1,2)
+ count=2 fetch 0.00000 a=3 next=(0,2)
+ insert (0,2) in tree w/ value=2.85250
+Begin 9-th Search Tree
+ count=7 fetch 4.19858 a=3 next=(1,2)
+ count=3 fetch 2.85250 a=1 next=(2,2)
+ count=-1 fetch 0.00000 a=0 next=(2,3)
+ insert (2,3) in tree w/ value=1.95000
+UCT TREE :-
+0:(2,2)
+1:(3,2)(2,1)(2,3)(1,2)
+2:(1,3)(0,2)(2,2)(1,1)
+3:(2,3)
+4:
+5:
+[Update Original Nodes]
+[End Update Original Nodes]
+
+[Abstraction]
+   [Update Inv. State Map] 
+   [End Update Inv. State Map] 
+ under sampled: (2,3) --> (2,3)
+   [Update Inv. State Map] 
+   [End Update Inv. State Map] 
+ under sampled: (2,2) --> (2,2)
+ under sampled: (1,3) --> (2,2)
+ under sampled: (1,1) --> (2,2)
+ under sampled: (0,2) --> (2,2)
+   [Update Inv. State Map] 
+   [End Update Inv. State Map] 
+ under sampled: (3,2) --> (3,2)
+ under sampled: (2,3) --> (3,2)
+ under sampled: (2,1) --> (3,2)
+ not-under sampled: (1,2)
+   [Calculate Abs. Trans. Prob.]
+   [Get Equiv. Abst SAPair] 1:(1,2)w/0
+ temp abs SA size: 0
+    1:(1,2)w/0 |--> 1:(1,2)w/0
+   [Calculate Abs. Trans. Prob.]
+   [Get Equiv. Abst SAPair] 1:(1,2)w/1
+ temp abs SA size: 1
+   i=0/true
+    1:(1,2)w/1 |--> 1:(1,2)w/0
+ found abstraction SAp 1:(1,2)w/0
+   [Calculate Abs. Trans. Prob.]
+   [Get Equiv. Abst SAPair] 1:(1,2)w/2
+ temp abs SA size: 1
+   i=0/true
+    1:(1,2)w/2 |--> 1:(1,2)w/0
+ found abstraction SAp 1:(1,2)w/0
+   [Calculate Abs. Trans. Prob.]
+   [Get Equiv. Abst SAPair] 1:(1,2)w/3
+ temp abs SA size: 1
+   i=0/true
+    1:(1,2)w/3 |--> 1:(1,2)w/0
+ found abstraction SAp 1:(1,2)w/0
+[[[DEBUG SA]]]
+1:(1,2)w/0
+  1:(1,2)w/0
+  1:(1,2)w/1
+  1:(1,2)w/2
+  1:(1,2)w/3
+1:(1,2)w/0 <--| 1:(1,2)w/0
+1:(1,2)w/1 <--| 1:(1,2)w/0
+1:(1,2)w/2 <--| 1:(1,2)w/0
+1:(1,2)w/3 <--| 1:(1,2)w/0
+ ++: 1:(1,2)w/0
+--------------
+ current  state: (1,2)
+   sa1 1:(1,2)w/0 |-> 1:(1,2)w/0
+   sa1 1:(1,2)w/1 |-> 1:(1,2)w/0
+   sa1 1:(1,2)w/2 |-> 1:(1,2)w/0
+   sa1 1:(1,2)w/3 |-> 1:(1,2)w/0
+  <print Temp Map>@get Equiv. Abst. State
+   1:(1,2)w/0:#4
+ new state S 
+ abstract state: (1,2)
+   [Update Inv. State Map] 
+ input 1,(1,2)
+	1,(1,2)   [End Update Inv. State Map] 
+ not-under sampled: (2,2)
+   [Calculate Abs. Trans. Prob.]
+   [Get Equiv. Abst SAPair] 0:(2,2)w/0
+ temp abs SA size: 0
+    0:(2,2)w/0 |--> 0:(2,2)w/0
+   [Calculate Abs. Trans. Prob.]
+   [Get Equiv. Abst SAPair] 0:(2,2)w/1
+ temp abs SA size: 1
+   i=0/true
+    0:(2,2)w/1 |--> 0:(2,2)w/0
+ found abstraction SAp 0:(2,2)w/0
+   [Calculate Abs. Trans. Prob.]
+   [Get Equiv. Abst SAPair] 0:(2,2)w/2
+ temp abs SA size: 1
+   i=0/true
+    0:(2,2)w/2 |--> 0:(2,2)w/0
+ found abstraction SAp 0:(2,2)w/0
+   [Calculate Abs. Trans. Prob.]
+   [Get Equiv. Abst SAPair] 0:(2,2)w/3
+ temp abs SA size: 1
+   i=0/false
+    0:(2,2)w/3 |--> 0:(2,2)w/3
+[[[DEBUG SA]]]
+0:(2,2)w/0
+  0:(2,2)w/0
+  0:(2,2)w/1
+  0:(2,2)w/2
+0:(2,2)w/3
+  0:(2,2)w/3
+1:(1,2)w/0
+  1:(1,2)w/0
+  1:(1,2)w/1
+  1:(1,2)w/2
+  1:(1,2)w/3
+0:(2,2)w/0 <--| 0:(2,2)w/0
+0:(2,2)w/1 <--| 0:(2,2)w/0
+0:(2,2)w/2 <--| 0:(2,2)w/0
+0:(2,2)w/3 <--| 0:(2,2)w/3
+1:(1,2)w/0 <--| 1:(1,2)w/0
+1:(1,2)w/1 <--| 1:(1,2)w/0
+1:(1,2)w/2 <--| 1:(1,2)w/0
+1:(1,2)w/3 <--| 1:(1,2)w/0
+ ++: 0:(2,2)w/0
+ ++: 0:(2,2)w/3
+--------------
+ current  state: (2,2)
+   sa1 0:(2,2)w/0 |-> 0:(2,2)w/0
+   sa1 0:(2,2)w/1 |-> 0:(2,2)w/0
+   sa1 0:(2,2)w/2 |-> 0:(2,2)w/0
+   sa1 0:(2,2)w/3 |-> 0:(2,2)w/3
+  <print Temp Map>@get Equiv. Abst. State
+   0:(2,2)w/0:#3
+   0:(2,2)w/3:#1
+ new state S 
+ abstract state: (2,2)
+(Update Data Values)
+ && Iteration over 0:(2,2)w/0
+   map 0:(2,2)w/0: count 1, value 4.52438
+   map 0:(2,2)w/1: count 1, value 4.52438
+   map 0:(2,2)w/2: count 1, value 4.52438
+  && TC 3, size 3
+  && adj TC 1
+  && STORE: 0:(2,2)w/0:1,4.52438
+ && Iteration over 0:(2,2)w/3
+   map 0:(2,2)w/3: count 6, value 4.25288
+  && TC 6, size 1
+  && adj TC 6
+  && STORE: 0:(2,2)w/3:6,4.25288
+ && Iteration over 1:(1,2)w/0
+   map 1:(1,2)w/0: count 1, value 3.70987
+   map 1:(1,2)w/1: count 2, value 3.28119
+   map 1:(1,2)w/2: count 1, value 3.70987
+   map 1:(1,2)w/3: count 1, value 3.70987
+  && TC 5, size 4
+  && adj TC 1
+  && STORE: 1:(1,2)w/0:1,3.53840

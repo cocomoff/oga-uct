@@ -192,13 +192,27 @@ namespace Online {
           double start_time,end_time, abs_start_time;
           start_time= Utils::my_read_time_in_milli_seconds();
           for (unsigned m = 0; m < l; ++m) {
-            // cout << "M" << m << endl;
+            cout << "M" << m << endl;
             cout << endl << endl;
             for( unsigned i = 0; i <this_decision_width/l; ++i ) {
-              // cout << "Begin " << i << "-th Search Tree" << endl;
-              search_tree(s, 0, false);
+              cout << "Begin " << i << "-th Search Tree" << endl;
+              // search_tree(s, 0, false);
+              search_tree(s, 0, true);
             }
             end_time= Utils::my_read_time_in_milli_seconds();
+
+            // std::cout << "STATE:" << s << " ACTION:" << action << std::endl;
+            std::cout << "UCT TREE :-" << std::endl;
+            for(int d = 0; d <= horizon_; ++d) {
+              std::cout << d << ":";
+              for(typename hash_t<T>::const_iterator it = table_.begin();
+                  it != table_.end(); ++it ) {
+                if(it->first.first == d) {
+                  std::cout << it->first.second << "";
+                }
+              }
+              cout << endl;
+            }
 			   
             update_original_nodes();
             abstract_to_ground_.clear();          
@@ -212,7 +226,8 @@ namespace Online {
             if (m!=l-1) {
               construct_abstract_tree(s);
               update_data_values();
-            } 
+            }
+            exit(-1);
           }
            
           end_time= Utils::my_read_time_in_milli_seconds();
@@ -224,18 +239,6 @@ namespace Online {
           Problem::action_t action = select_action(s, it->second, 0, false, random_ties_);
           assert(problem().applicable(s, action));
 
-          std::cout << "STATE:" << s << " ACTION:" << action << std::endl;
-          std::cout << "UCT TREE :-" << std::endl;
-          for(int d = 0; d <= horizon_; ++d) {
-            std::cout << d << ":";
-            for(typename hash_t<T>::const_iterator it = table_.begin();
-                it != table_.end(); ++it ) {
-              if(it->first.first == d) {
-                std::cout << it->first.second << "";
-              }
-            }
-            cout << endl;
-          }
           // cout << endl;
           exit(-1);
           return action;
@@ -440,7 +443,7 @@ namespace Online {
 
 
         state_action_pair_ get_equivalent_abstractSApair (state_action_pair_ currentSApair) const {
-          cout << "   [Get Equiv. Abst SAPair] " << endl;
+          cout << "   [Get Equiv. Abst SAPair] " << sapair2str(currentSApair) << endl;
           
           T currentState = (currentSApair.first).second;
           bool isEquiv = false;     
@@ -563,7 +566,7 @@ namespace Online {
         /* SAU Function to compute abstractions */
         void construct_abstract_tree(const T &s) const {
 
-          cout << "   [Abstraction]" << endl;
+          cout << "[Abstraction]" << endl;
 
           //ground to abstract mapping stored only for previous level
           T repUndersampledNode;
@@ -875,14 +878,20 @@ namespace Online {
 
           bool exists_unexplored = false;
 
-          for( Problem::action_t a = 0; a < nactions; ++a ) {
+
+          // Unexplored nodes
+          for (Problem::action_t a = 0; a < nactions; ++a) {
+            if (problem().applicable(state, a)) {
+              if (data.counts_[1+a] == 0) {
+                return a;
+              }
+            }
+          }
+
+          for (Problem::action_t a = 0; a < nactions; ++a ) {
             if( problem().applicable(state, a) ) {
-              /*
-              std::cout << "783: State:" << state
-                        << " Depth:" << depth
-                        << " Action" << a << endl;
-              */
               // if this action has never been taken in this node, select it
+              /*
               if( data.counts_[1+a] == 0 ) {
                 if(!exists_unexplored)
                   best_actions.clear();
@@ -893,7 +902,7 @@ namespace Online {
 
               if(exists_unexplored)
                 continue;
-
+              */
               // compute score of action adding bonus (if applicable)
               // Code_ Modified SAU
               assert(getTotalCount(state, depth, data.counts_)>0);
@@ -919,12 +928,14 @@ namespace Online {
               float bonus = add_bonus ? par * sqrt(log_ns / masterCount) : 0;
               float value = masterValue + bonus;
 
-              /*
-              cout << " par " << par
-                   << " bonus " << bonus
-                   << " masterV " << masterValue
-                   << " value " << value << endl;
-              */
+
+              if (false) {
+                cout << " par " << par
+                     << " bonus " << bonus
+                     << " masterV " << masterValue
+                     << " value " << value << endl;
+              }
+
 
               // update best action so far
               if( value <= best_value ) {
