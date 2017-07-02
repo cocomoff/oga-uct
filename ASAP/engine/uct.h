@@ -35,7 +35,7 @@
 #include <ctime>
 #include <unordered_map>
 
-#define ALPHA 0.1
+#define ALPHA 0.0
 extern bool new_trial;
 extern bool goal_reached;
 extern int this_trial_decisions;
@@ -123,6 +123,8 @@ namespace Online {
         typedef std::pair<unsigned, T> tree_node_;
         // A tree node is given by (depth, state)
         typedef std::pair<tree_node_,Problem::action_t> state_action_pair_;
+        typedef state_action_pair_ SAp_;
+        typedef std::vector<state_action_pair_> VecSAp_;
 
         mutable std::map<tree_node_, std::vector<tree_node_>> abstract_to_ground_;
         // Mapping from abstract state nodes to vector of ground state nodes
@@ -131,7 +133,8 @@ namespace Online {
         // Mapping from abstract (state, action) pair node to set of ground (state, action) pair nodes
         mutable std::map<state_action_pair_,state_action_pair_> inverse_SA_;
         // Inverse mapping from ground (state, action) pair node to abstract (state, action) pair node
-        mutable std::map<state_action_pair_,std::pair<int,float>> SA_abstract_data_;
+        typedef std::pair<int, float> Pair_IF;
+        mutable std::map<state_action_pair_, Pair_IF> SA_abstract_data_;
         // Data Corresponding to an abstract (state, action) pair node
         mutable std::map <T,T> temp_inverse_state_map, temp_inverse_undersampled_state_map;
         // Temporary global maps
@@ -144,7 +147,7 @@ namespace Online {
         mutable std::map<state_action_pair_,innerMap> SuperMap;
         mutable std::map<innerMap,std::vector<state_action_pair_>> revSuperVMap;
         typedef std::map<state_action_pair_,int> innerStateMap;
-        mutable std::map<innerStateMap,T> revStateSuperMap;
+        mutable std::map<innerStateMap, T> revStateSuperMap;
 
 
       public:
@@ -169,6 +172,14 @@ namespace Online {
         }
         virtual ~uct_t() { }
 
+        std::string sapair2str(const state_action_pair_& sapair) const {
+          std::stringstream fs;
+          fs << sapair.first.first << ":"
+             << sapair.first.second << "w/"
+             << sapair.second;
+          return fs.str();
+        }
+
         virtual Problem::action_t operator()(const T &s) const {
           ++policy_t<T>::decisions_;
      
@@ -181,10 +192,11 @@ namespace Online {
           double start_time,end_time, abs_start_time;
           start_time= Utils::my_read_time_in_milli_seconds();
           for (unsigned m = 0; m < l; ++m) {
-            cout << "M" << m << endl;
+            // cout << "M" << m << endl;
+            cout << endl << endl;
             for( unsigned i = 0; i <this_decision_width/l; ++i ) {
-              cout << "Begin " << i << "-th Search Tree" << endl;
-              search_tree(s, 0);
+              // cout << "Begin " << i << "-th Search Tree" << endl;
+              search_tree(s, 0, false);
             }
             end_time= Utils::my_read_time_in_milli_seconds();
 			   
@@ -224,7 +236,7 @@ namespace Online {
             }
             cout << endl;
           }
-          cout << endl;
+          // cout << endl;
           exit(-1);
           return action;
         }
@@ -318,10 +330,21 @@ namespace Online {
 
 
         void update_inverse_state_map( unsigned currentDepth) const {
-          unsigned abstractDepth; T abstractState;
+          cout << "   [Update Inv. State Map] " << endl;
+          unsigned abstractDepth;
+          T abstractState;
+
+          // mutable std::map<tree_node_, std::vector<tree_node_>> abstract_to_ground_;
+          for (auto kv : abstract_to_ground_) {
+            cout << " input " << kv.first.first << "," << kv.first.second << endl;
+            cout << "\t";
+            for (auto tn : kv.second) {
+              cout << tn.first << "," << tn.second;
+            }
+          }
+          
           typename std::map <tree_node_,std::vector<tree_node_> >::reverse_iterator rgit;
-          for (rgit = abstract_to_ground_.rbegin(); rgit != abstract_to_ground_.rend(); ++rgit)
-          {
+          for (rgit = abstract_to_ground_.rbegin(); rgit != abstract_to_ground_.rend(); ++rgit) {
             abstractDepth=(rgit->first).first;
             abstractState=(rgit->first).second;
             if (abstractDepth==currentDepth+1){
@@ -332,202 +355,112 @@ namespace Online {
             else if (abstractDepth<currentDepth+1)
               break;
           }
+          cout << "   [End Update Inv. State Map] " << endl;
         }
 
-        bool isEquivalentSA( const T &FirstState, int FirstAction, const T &SecondState, int SecondAction) const {
-
-          if (problem().cost(FirstState,FirstAction)!=problem().cost(SecondState,SecondAction))
-            return false;
-
-          typename std::map <T,T>::iterator temp_map_it;
-          //std::vector<std::pair<T, float> > outcomesFirst, outcomesSecond;
-          //problem().next(FirstState, FirstAction, outcomesFirst);
-          //problem().next(SecondState, SecondAction, outcomesSecond);
-          //unsigned osizeFirst = outcomesFirst.size(), osizeSecond = outcomesSecond.size();
-          std::map <T,std::array<float,2>> transComparison;
-          typename std::map <T,std::array<float,2>>::iterator transIter;
-          std::array<float,2> transTemp;
-          transTemp[0]=0; //Sau_Ankit
-          transTemp[1]=0; //Sau_Ankit
-          T temp_outcome_node;
-          float transition_prob;
-
-
-
-          for(temp_map_it=temp_inverse_state_map.begin();temp_map_it!=temp_inverse_state_map.end();temp_map_it++)
-          {
-            temp_outcome_node=temp_map_it->second;
-            transition_prob=problem().calculate_transition(FirstState,temp_map_it->first,FirstAction);
-            transIter=transComparison.find(temp_outcome_node);
-            //std::cout<<"Prob Value "<<transition_prob<<"\n";
-            if (transIter==transComparison.end()){
-              transTemp[0]=transition_prob;
-              transComparison.insert(std::pair<T,std::array<float,2>>(temp_outcome_node,transTemp));
-            } else {
-              transTemp=transIter->second;
-              transTemp[0]=transTemp[0]+transition_prob;
-              transIter->second=transTemp;
-            }
-          }
-          /*std::cout<<"\n Map1"<<FirstState<<" "<<FirstAction<<"\n";
-          //return temp_trans_map;
-          for(transIter=transComparison.begin();transIter!=transComparison.end();transIter++)
-          {
-          std::cout<<transIter->first<<" "<< transIter->second[0]<"\n";
-          }*/
-          for(temp_map_it=temp_inverse_state_map.begin();temp_map_it!=temp_inverse_state_map.end();temp_map_it++)
-          {
-            temp_outcome_node=temp_map_it->second;
-            transition_prob=problem().calculate_transition(SecondState,temp_map_it->first,SecondAction);
-            transIter=transComparison.find(temp_outcome_node);
-            if (transIter==transComparison.end()){
-              return false;
-            } else {
-              transTemp=transIter->second;
-              transTemp[1]=transTemp[1]+transition_prob;
-              transIter->second=transTemp;
-            }
-          }
-
-
-          for (transIter=transComparison.begin(); transIter!=transComparison.end(); ++transIter)
-          {
-            transTemp=transIter->second;
-            if (transTemp[0]!=transTemp[1]){
-              return false;
-            }
-          }
-          return true;
-        }
     
-        bool isEquivalentSA1(state_action_pair_ currentSApair, state_action_pair_ abstractSApair)const{
-        
-          if (problem().cost(currentSApair.first.second,currentSApair.second)!=problem().cost(abstractSApair.first.second,abstractSApair.second))
+        bool isEquivalentSA1(state_action_pair_ currentSApair,
+                             state_action_pair_ abstractSApair) const{
+
+          auto s1 = currentSApair.first.second;
+          auto a1 = currentSApair.second;
+          auto s2 = abstractSApair.first.second;
+          auto a2 = abstractSApair.second;
+
+          
+          if (problem().cost(s1, a1) != problem().cost(s2, a2))
             return false;
 
           std::map<T,float> Map1;
           std::map<T,float> Map2;
-        
-        
        
-          Map1=SuperMap[currentSApair];
-          Map2=SuperMap[abstractSApair];
-          typename std::map<T,float> ::iterator m1;
-          for(m1=Map1.begin();m1!=Map1.end();m1++)
-          {
-            if(Map2.find(m1->first)!=Map2.end())
-            {    
-              if(fabs(Map2[m1->first]-(m1->second))>0.0)
-              {
-                //std::cout<<"here\n"<<Map2[m1->first]<<" "<<m1->second<<"\n";
-                //exit(0);
-                return false;
+          Map1 = SuperMap[currentSApair];
+          Map2 = SuperMap[abstractSApair];
 
-              }
-              else
-              {
-                //std::cout<<"kjhk\n"<<Map2[m1->first]<<" "<<m1->second<<" "<<abs(Map2[m1->first]-(m1->second))<<"\n";
-                //exit(0);
+          typename std::map<T,float> ::iterator m1;
+          for (m1=Map1.begin();m1!=Map1.end();m1++) {
+            // cout << " m1 " << m1->first << ":" << m1->second << endl;
+            if (Map2.find(m1->first)!=Map2.end()) {
+              if(fabs(Map2[m1->first]-(m1->second))>0.0) {
+                return false;
+              } else {
                 Map2.erase(m1->first);
               }
+            } else {
+              return false;
             }
-            else
-              return false;    
           }
-          if(Map2.empty())
-            return true;
-          else
-            return false;
-          /*if(Map1==Map2)
-            return true;
-            else
-            return false;*/
+          return Map2.empty();
         }
-        state_action_pair_ get_equivalent_abstractSApair1( state_action_pair_ currentSApair) const {
-
-          innerMap currentSApairMap=SuperMap[currentSApair];
-          typename std::map<innerMap,std::vector<state_action_pair_>>::iterator itRevSuperMap;
-          itRevSuperMap=revSuperVMap.find(currentSApairMap);
-          state_action_pair_ abstractSApair;
-          if(itRevSuperMap==revSuperVMap.end())
-          {
-            std::vector<state_action_pair_> tempVector;
-            tempVector.push_back(currentSApair);
-            revSuperVMap.insert(std::make_pair(currentSApairMap,tempVector));
-
-          }
-          else
-          {
-            std::vector<state_action_pair_> tempVector=itRevSuperMap->second;
-            for(unsigned i=0;i<tempVector.size();i++)
-            {
-              abstractSApair=tempVector[i];
-              if (problem().cost(currentSApair.first.second,currentSApair.second)==problem().cost(abstractSApair.first.second,abstractSApair.second))
-                return abstractSApair;
-            }
-            itRevSuperMap->second.push_back(currentSApair);
-
-          }
-          return currentSApair;
-        }
-
-
     
 
         T get_equivalent_abstractState(const T &s, unsigned depth)const{
-          int nactions=problem().number_actions(s);
+          int nactions = problem().number_actions(s);
           innerStateMap tempMap;
           typename innerStateMap::iterator itInnerStateMap;
           state_action_pair_ SA1;
           state_action_pair_ absPair;
-          for(unsigned a=0;a<nactions;a++)
-          {
-            if(problem().applicable(s,a))
-            {
+          for(unsigned a=0;a<nactions;a++) {
+            if(problem().applicable(s,a)) {
               SA1=std::make_pair(std::make_pair(depth,s),a);
               absPair=inverse_SA_[SA1];
-              itInnerStateMap=tempMap.find(absPair);
-              if(itInnerStateMap!=tempMap.end())
-                itInnerStateMap->second+=1;
-              else
-                tempMap.insert(std::make_pair(absPair,1));
 
+              cout << "   sa1 " << sapair2str(SA1) << " |-> "
+                   << sapair2str(absPair) << endl;
+              
+              auto itInnerStateMap = tempMap.find(absPair);
+              if (itInnerStateMap != tempMap.end()) {
+                itInnerStateMap->second+=1;
+              } else {
+                tempMap.insert(std::make_pair(absPair, 1));
+              }
             }
           }
-          typename std::map<innerStateMap,T>::iterator tempIt;
-          tempIt=revStateSuperMap.find(tempMap);
-          if(tempIt!=revStateSuperMap.end())
-            return tempIt->second;
-          else
-            revStateSuperMap.insert(std::make_pair(tempMap,s));
-          return s;
 
+          // print tempMap
+          // typedef std::map<state_action_pair_,int> innerStateMap;
+          cout << "  <print Temp Map>@get Equiv. Abst. State" << endl;
+          for (auto kv : tempMap) {
+            cout << "   " << sapair2str(kv.first) << ":#" << kv.second << endl;
+          }
+
+          
+          auto it = revStateSuperMap.find(tempMap);
+          // typename std::map<innerStateMap,T>::iterator tempIt;
+          // tempIt=revStateSuperMap.find(tempMap);
+          if (it != revStateSuperMap.end()) {
+            cout << " found " << endl;
+            return it->second;
+          } else {
+            cout << " new state S " << endl;
+            revStateSuperMap.insert(std::make_pair(tempMap, s));
+          }
+          return s;
         }
 
 
-        state_action_pair_ get_equivalent_abstractSApair( state_action_pair_ currentSApair) const {
-          // unsigned currentDepth=(currentSApair.first).first;
-          T currentState=(currentSApair.first).second;
-          // Problem::action_t currentAction = currentSApair.second;   
-          bool isEquiv=false;     
+        state_action_pair_ get_equivalent_abstractSApair (state_action_pair_ currentSApair) const {
+          cout << "   [Get Equiv. Abst SAPair] " << endl;
+          
+          T currentState = (currentSApair.first).second;
+          bool isEquiv = false;     
           typename std::map <T,T>::iterator invit;
-          typename std::map <state_action_pair_,std::vector<state_action_pair_>>::reverse_iterator action_map_it;
-          unsigned abstractDepth;
+          typename std::map <state_action_pair_, std::vector<state_action_pair_>>::reverse_iterator action_map_it;
           T abstractState;
           state_action_pair_ abstractSApair;
 
-          for(unsigned i=0;i<temp_abs_SA.size();i++) {
-            abstractSApair=temp_abs_SA[i];
-            abstractDepth=abstractSApair.first.first;
-            abstractState=abstractSApair.first.second;
-            // Problem::action_t abstract_action=abstractSApair.second;
-
-            bool flagNotEquiv=isEquivalentSA1(currentSApair,abstractSApair);
+          cout << " temp abs SA size: " << temp_abs_SA.size() << endl;
+          
+          for(unsigned i=0; i < temp_abs_SA.size(); i++) {
+            abstractSApair = temp_abs_SA[i];
+            abstractState = abstractSApair.first.second;
+            bool flagNotEquiv = isEquivalentSA1(currentSApair,abstractSApair);
+            cout << "   i=" << i << "/" << std::boolalpha << flagNotEquiv << endl;
                 
             if(!flagNotEquiv)
               continue;
 
-            isEquiv=true;
+            isEquiv = true;
             break;
           }
 
@@ -537,79 +470,140 @@ namespace Online {
             return currentSApair;
         }
 
-        void calculate_abs_trans_probs(state_action_pair_ currentSApair) const{
-     
-          std::map<T,float> temp_trans_map;
+        void calculate_abs_trans_probs(state_action_pair_ currentSApair) const {
+          bool debug_flag = false;
+          cout << "   [Calculate Abs. Trans. Prob.]" << endl;
+
+          std::map<T, float> temp_trans_map;
           temp_trans_map.clear();
           typename std::map<T,float>::iterator transIter;
           float transition_prob;
           T temp_outcome_node;
         
-          typename std::map <T,T>::iterator temp_map_it;
+          auto map_it = temp_inverse_state_map.begin();
           float prob_max=-1;
-          for(temp_map_it=temp_inverse_state_map.begin();temp_map_it!=temp_inverse_state_map.end();temp_map_it++)
-          {
-            //temp_outcome_node=temp_map_it->second;
-            transition_prob=problem().calculate_transition(currentSApair.first.second,temp_map_it->first,currentSApair.second);
-            if(transition_prob> prob_max)
-              prob_max=transition_prob;
+          for(; map_it != temp_inverse_state_map.end(); map_it++) {
+            transition_prob = problem().calculate_transition(currentSApair.first.second,
+                                                             map_it->first,
+                                                             currentSApair.second);
+            if(transition_prob > prob_max) {
+              prob_max = transition_prob;
+            }
           }
-          for(temp_map_it=temp_inverse_state_map.begin();temp_map_it!=temp_inverse_state_map.end();temp_map_it++)
-          {
+
+          map_it = temp_inverse_state_map.begin();
+          for(; map_it != temp_inverse_state_map.end(); map_it++) {
+            transition_prob = problem().calculate_transition(currentSApair.first.second,
+                                                             map_it->first,
+                                                             currentSApair.second);
+
+            if (debug_flag) {
+              cout << " TP from " << currentSApair.first.second << " to "
+                   << map_it->first << " by "
+                   << currentSApair.second << "=" << transition_prob << endl;
+            }
             
-            transition_prob=problem().calculate_transition(currentSApair.first.second,temp_map_it->first,currentSApair.second);
-            if(transition_prob < ALPHA*prob_max)
+            if(transition_prob < ALPHA * prob_max) {
+              // cout << " -- alpha " << endl;
               continue;
-            temp_outcome_node=temp_map_it->second;
-            transIter=temp_trans_map.find(temp_outcome_node);
+            }
+            temp_outcome_node = map_it->second;
+
+            if (debug_flag) {
+              cout << "    outcome node " << temp_outcome_node << endl;
+            }
+            
+            transIter = temp_trans_map.find(temp_outcome_node);
 
             if (transIter==temp_trans_map.end()){
               temp_trans_map.insert(std::pair<T,float>(temp_outcome_node,transition_prob));
             } 
             else {
-              transIter->second+=transition_prob;
+              transIter->second += transition_prob;
+            }
+            std::map<T,float> temp_trans_map;
+          }
+
+          SuperMap.insert(std::make_pair(currentSApair, temp_trans_map));
+
+          if (debug_flag) {
+            cout << " current SA pair:" << currentSApair.first.first << ":"
+                 << currentSApair.first.second << " w/ " << currentSApair.second << endl;
+            for (auto tv : temp_trans_map) {
+              cout << " --> " << tv.first << " w/" << tv.second << endl;
+            }
+          }
+        }
+
+        /* debug SA pair */
+        void debug_SA() const {
+          // std::map<state_action_pair_,std::vector<state_action_pair_>> SA_abstract_to_ground_;
+          // std::map<state_action_pair_,state_action_pair_> inverse_SA_;
+          // std::vector<state_action_pair_> temp_abs_SA;
+          cout << "[[[DEBUG SA]]]" << endl;
+          for (auto kv : SA_abstract_to_ground_) {
+            cout << sapair2str(kv.first) << endl;
+            for (auto pair : kv.second) {
+              cout << "  " << sapair2str(pair) << endl;
             }
           }
 
-          SuperMap.insert(std::make_pair(currentSApair,temp_trans_map));
-          //revSuperMMap.insert(std::make_pair(temp_trans_map,currentSApair));
-        }
+          for (auto kv : inverse_SA_) {
+            cout << sapair2str(kv.first) << " <--| " << sapair2str(kv.second) << endl;
+          }
 
+          for (auto kv : temp_abs_SA) {
+            cout << " ++: " << sapair2str(kv) << endl;
+          }
+          cout << "--------------" << endl;
+          return;
+        }
+        
+        
         /* SAU Function to compute abstractions */
         void construct_abstract_tree(const T &s) const {
 
+          cout << "   [Abstraction]" << endl;
+
           //ground to abstract mapping stored only for previous level
           T repUndersampledNode;
-          bool flagUndersampled=0;
+          bool flagUndersampled = false;
 
           std::map <tree_node_, data_t> orderedMap;
           typename hash_t<T>::const_iterator it;
           typename std::map <tree_node_, data_t>::reverse_iterator rit;
          
           // double start_time,end_time;
-          //start_time=  Utils::my_read_time_in_milli_seconds();
           for (it = table_.begin(); it != table_.end(); ++it) {
             orderedMap.insert(std::make_pair(it->first,it->second));
           }
-          //end_time= Utils::my_read_time_in_milli_seconds();
-          //std::cout<<end_time-start_time<<"\n";
+
+          /*
+           all nodes are sorted by 'depth'
+          for (auto kv : orderedMap) {
+            auto tn = kv.first;
+            cout << "   " << tn.first << "," << tn.second << endl;
+          }
+          */
           
           typename std::map <tree_node_,std::vector<tree_node_> >::reverse_iterator rgit;
           typename std::map <state_action_pair_,std::vector<state_action_pair_>>::iterator action_map_it;
 
           typename std::map <state_action_pair_,state_action_pair_>::iterator rev_action_map_it;
-          unsigned oldDepth=0;
+          unsigned oldDepth = -1;
         
-          for ( rit= orderedMap.rbegin(); rit != orderedMap.rend(); ++rit) {
+          for (rit= orderedMap.rbegin(); rit != orderedMap.rend(); ++rit) {
+            // Iteration nodes from bottom to top
+            
             unsigned currentDepth=(rit->first).first;
             T currentState=(rit->first).second;
             
-            if (currentDepth!=oldDepth) {
-              oldDepth=currentDepth;
+            if (currentDepth != oldDepth) {
+              oldDepth = currentDepth;
               temp_inverse_state_map.clear();
               temp_abs_SA.clear();
-              temp_inverse_state_map=temp_inverse_undersampled_state_map;
-              update_inverse_state_map( currentDepth);
+              temp_inverse_state_map = temp_inverse_undersampled_state_map;
+              update_inverse_state_map(currentDepth);
               temp_inverse_undersampled_state_map.clear();
               flagUndersampled=0;
               SuperMap.clear();
@@ -618,51 +612,63 @@ namespace Online {
             }
 
             if(isUndersampledState(currentState,currentDepth)) {
-              if (flagUndersampled==0) {
-                repUndersampledNode=currentState;
-                flagUndersampled=1;
+              if (!flagUndersampled) {
+                repUndersampledNode = currentState;
+                flagUndersampled = true;
               }
-              temp_inverse_undersampled_state_map.insert(std::pair<T,T>(currentState,repUndersampledNode));                
+              auto pair = std::pair<T, T>(currentState, repUndersampledNode);
+              temp_inverse_undersampled_state_map.insert(pair);
+              cout << " under sampled: " << currentState << " --> " << repUndersampledNode << endl;
             } else {
+              cout << " not-under sampled: " << currentState << endl;
               typename std::map<T,T>::iterator t1;
-              tree_node_ currentNode=rit->first;
+              tree_node_ currentNode = rit->first;
               int nactions=problem().number_actions(currentState);
-              // unsigned abstractDepth;
               T abstractState;
               state_action_pair_ abstractSApair;
 
               // Building Action mapping
-              for(Problem::action_t a=0;a<nactions;a++) {
+              for (Problem::action_t a = 0; a < nactions; a++) {
                 if(problem().applicable(currentState, a)) {
                   state_action_pair_ currentSApair(std::make_pair(currentNode,a));
                   calculate_abs_trans_probs(currentSApair);
 
-                  state_action_pair_ answer = get_equivalent_abstractSApair( currentSApair);
-                  action_map_it=SA_abstract_to_ground_.find(answer);
-                  if (action_map_it!=SA_abstract_to_ground_.end()) {
-                    abstractSApair=action_map_it->first;
-                    action_map_it->second.push_back(currentSApair); 
-                    inverse_SA_.insert(std::pair<state_action_pair_,state_action_pair_>(currentSApair,abstractSApair));                        
+                  state_action_pair_ answer = get_equivalent_abstractSApair(currentSApair);
+                  cout << "    " << sapair2str(currentSApair)
+                       << " |--> " << sapair2str(answer) << endl;
+                  action_map_it = SA_abstract_to_ground_.find(answer);
+
+                  if (action_map_it != SA_abstract_to_ground_.end()) {
+                    abstractSApair = action_map_it->first;
+                    auto inv_pair = std::pair<SAp_, SAp_>(currentSApair, abstractSApair);
+                    inverse_SA_.insert(inv_pair);
+                    cout << " found abstraction SAp " << sapair2str(abstractSApair) << endl;
+                    action_map_it->second.push_back(currentSApair);
                   } else {
-                    std::vector<state_action_pair_> groundSAVector(1,currentSApair);
+                    /* update */
+                    auto inv_pair = std::pair<SAp_, SAp_>(currentSApair, currentSApair);
+                    inverse_SA_.insert(inv_pair);
+                    std::vector<state_action_pair_> groundSAVector(1, currentSApair);
                     temp_abs_SA.push_back(currentSApair);
-                    SA_abstract_to_ground_.insert(std::pair<state_action_pair_,std::vector<state_action_pair_>>(currentSApair,groundSAVector));
-                    inverse_SA_.insert(std::pair<state_action_pair_,state_action_pair_>(currentSApair,currentSApair));                        
+                    SA_abstract_to_ground_.insert(std::pair<state_action_pair_, VecSAp_>(currentSApair,groundSAVector));
                   }        
                 }
               }
 
-              //building state mapping based on the above action map
+              // debug print
+              debug_SA();
 
-              // bool isNewNode=false;
-              abstractState=get_equivalent_abstractState(currentState,currentDepth);
-              tree_node_ absRepNode(std::make_pair(currentDepth,abstractState));
-              typename std::map<tree_node_,std::vector<tree_node_>>::iterator stateIt;
-              stateIt=abstract_to_ground_.find(absRepNode);
-              if(stateIt!=abstract_to_ground_.end()) {
-                (stateIt->second).push_back(absRepNode);
+              // building state mapping based on the above action map
+              cout << " current  state: " << currentState << endl;
+              abstractState = get_equivalent_abstractState(currentState, currentDepth);
+              cout << " abstract state: " << abstractState << endl;
+              
+              tree_node_ absRepNode(std::make_pair(currentDepth, abstractState));
+              auto state_it = abstract_to_ground_.find(absRepNode);
+              if (state_it != abstract_to_ground_.end()) {
+                (state_it->second).push_back(absRepNode);
               } else {
-                std::vector<tree_node_> groundStateVector(1,absRepNode);                  
+                std::vector<tree_node_> groundStateVector(1, absRepNode);                  
                 abstract_to_ground_.insert(std::make_pair(absRepNode,groundStateVector));
               }
             }
@@ -677,88 +683,109 @@ namespace Online {
           typename hash_t<T>::iterator it;
           it=table_.find(std::make_pair(depth,s));
         
-          for(Problem::action_t a=0;a<nactions;++a)
-          {
-            if(problem().applicable(s,a))
-            {
+          for(Problem::action_t a = 0; a < nactions; ++a) {
+            if(problem().applicable(s,a)) {
               typename std::map<state_action_pair_,state_action_pair_>::iterator invIt;
               invIt=inverse_SA_.find(std::make_pair(std::make_pair(depth,s),a));
-              if(invIt!=inverse_SA_.end())
-              {
+              if(invIt!=inverse_SA_.end()) {
                 typename std::map<state_action_pair_,std::pair<int,float>> ::iterator data_it;
                 data_it=SA_abstract_data_.find(invIt->second);
                         
                 sum_of_elems += data_it->second.first;
+              } else {
+                sum_of_elems += count_array[1+a];
               }
-              else
-                sum_of_elems += count_array[1+a]; 
             }
           }
           return sum_of_elems;
 
         }
 
-        /* v2 addition: Updates Data Values of true nodes as per the value of the corresponding abstract node*/
+        /* v2 addition: Updates Data Values of true nodes as
+           per the value of the corresponding abstract node*/
+        // std::map<state_action_pair_, std::vector<state_action_pair_>> SA_abstract_to_ground_;
         void update_data_values() const {
+          cout << "(Update Data Values)" << endl;
           typename hash_t<T>::iterator it;
           typename std::map<state_action_pair_,std::vector<state_action_pair_>>::iterator actit;
           typename std::vector<state_action_pair_>::iterator vec_act_it;
 
-          int total_count=0;
-          float avg_values=0;
+          int total_count = 0;
+          float avg_values = 0;
+
           // Calculating average
-          for(actit=SA_abstract_to_ground_.begin();actit!=SA_abstract_to_ground_.end();++actit)
-          {
-            avg_values=0;
-            total_count=0;
-            for(vec_act_it=actit->second.begin();vec_act_it!=actit->second.end();++vec_act_it)
-            {
-              it=table_.find(vec_act_it->first);
-              if(actit->second.size()!=1)
-                avg_values+=it->second.counts_[1+vec_act_it->second]*it->second.values_[1+vec_act_it->second];
-              else
-                avg_values+=it->second.values_[1+vec_act_it->second];
-              total_count+=(it->second).counts_[1+vec_act_it->second]; 
-            }    
-            //std::cerr<<"total_count is "<<total_count<<"\n";  
-#ifdef MY_DEBUG  
-            if (total_count<=0) {
-              std::cerr<<"total_count is "<<total_count<<"\n";
-              exit(0);
-            }
-#endif
-            if(actit->second.size()!=1)
-              avg_values/=total_count;
-            total_count=(int)(total_count/actit->second.size());
-            SA_abstract_data_.insert(std::pair<state_action_pair_,std::pair<int,float>>(actit->first,std::make_pair(total_count,avg_values)));
-           
-            //std::cout<<"State:"<<actit->first.first.second<<" Depth:"<<actit->first.first.first<<" Action"<<actit->first.second<<" Old Value1:"<<avg_values<<"\n";
-            // //std::cout<<"Total Count:"<<total_count<<" Abstraction Size:"<<actit->second.size()<<"\n";
+          for(actit=SA_abstract_to_ground_.begin();
+              actit!=SA_abstract_to_ground_.end(); ++actit) {
+            avg_values = 0;
+            total_count = 0;
+
+            cout << " && Iteration over " << sapair2str(actit->first) << endl;
             
+            for(vec_act_it=actit->second.begin();
+                vec_act_it!=actit->second.end(); ++vec_act_it) {
+
+
+              it = table_.find(vec_act_it->first);
+              auto c = it->second.counts_[1 + vec_act_it->second];
+              auto v = it->second.values_[1 + vec_act_it->second];
+              cout << "   map " << sapair2str(*vec_act_it) << ": count " << c << ", value " << v << endl;
+                
+              if(actit->second.size()!=1) {
+                // cout << " multiple map " << endl;
+                avg_values += it->second.counts_[1+vec_act_it->second]*it->second.values_[1+vec_act_it->second];
+              } else {
+                // cout << " singleton map " << endl;
+                avg_values += it->second.values_[1+vec_act_it->second];
+              }
+              total_count += (it->second).counts_[1+vec_act_it->second];
+            }    
+            if (actit->second.size()!=1) {
+              // weighted average
+              avg_values/=total_count;
+            }
+            cout << "  && TC " << total_count << ", size " << actit->second.size() << endl;
+            total_count = (int)(total_count/actit->second.size());
+            cout << "  && adj TC " << total_count << endl;
+            Pair_IF pif = std::make_pair(total_count, avg_values);
+            SA_abstract_data_.insert(std::pair<state_action_pair_, Pair_IF>(actit->first, pif));
+            cout << "  && STORE: " << sapair2str(actit->first) << ":" << total_count << "," << avg_values << endl;
           } 
         }
 
         void update_original_nodes()const{
-          typename std::map <state_action_pair_,std::vector<state_action_pair_> >::reverse_iterator rgit;
-          typename std::map <state_action_pair_,std::pair<int,float> >::iterator abit;
+          cout << "[Update Original Nodes]" << endl;
+          typename std::map <state_action_pair_, VecSAp_>::reverse_iterator rgit;
+          typename std::map <state_action_pair_, Pair_IF>::iterator abit;
           typename std::vector<state_action_pair_>::iterator vecit;
           typename hash_t<T>::iterator it;
 
-          for (rgit =SA_abstract_to_ground_ .rbegin(); rgit != SA_abstract_to_ground_.rend(); ++rgit){
+          for (rgit =SA_abstract_to_ground_ .rbegin();
+               rgit != SA_abstract_to_ground_.rend(); ++rgit){
+
+            cout << " pair " << sapair2str(rgit->first) << endl;
+
+            
             for(vecit=(rgit->second).begin();vecit!=(rgit->second).end();++vecit){
 
-              it=table_.find(std::make_pair(vecit->first.first, vecit->first.second));
-                
-              abit=SA_abstract_data_.find(rgit->first);
+              cout << "   - abst: " << sapair2str(*vecit) << endl;
+              abit = SA_abstract_data_.find(rgit->first);
+              it = table_.find(std::make_pair(vecit->first.first, vecit->first.second));
               it->second.counts_[1+vecit->second]=abit->second.first;
-              //it->second.counts_[1+vecit->second]=abit->second.first/rgit->second.size();
               it->second.values_[1+vecit->second]=abit->second.second;
+
+              auto c1 = it->second.counts_[1+vecit->second];
+              auto c2 = abit->second.first;
+              auto v1 = it->second.values_[1+vecit->second];
+              auto v2 = abit->second.second;
+              
+              cout << "   update: " << c1 << ", " << c2 << endl;
+              cout << "   update: " << v1 << ", " << v2 << endl;
             }
           }
-
+          cout << "[End Update Original Nodes]" << endl << endl;
         }
 
-        float search_tree(const T &s, unsigned depth) const {
+        float search_tree(const T &s, unsigned depth, bool all_debug) const {
           //std::cout << std::setw(2*depth) << "" << "search_tree(" << s << "):";
 
           if( (depth == horizon_) || problem().terminal(s) ){
@@ -771,13 +798,16 @@ namespace Online {
 
           typename hash_t<T>::iterator it = table_.find(std::make_pair(depth, s));
           if( it == table_.end() ) {
-            std::vector<float> values (1 + problem().number_actions(s), 0);
-            std::vector<int> counts(1 + problem().number_actions(s), 0);
+            Problem::action_t nA = problem().number_actions(s);
+            std::vector<float> values (1 + nA, 0);
+            std::vector<int> counts(1 + nA, 0);
             
             table_.insert(std::make_pair(std::make_pair(depth, s), data_t(values, counts)));
 
             float value = evaluate(s, depth);
-            std::cout << " insert in tree w/ value=" << value << std::endl;
+            if (all_debug) {
+              std::cout << " insert " << s << " in tree w/ value=" << value << std::endl;
+            }
             return value;
           } else {
             Problem::action_t a = select_action(s, it->second, depth, true, random_ties_);
@@ -788,13 +818,15 @@ namespace Online {
             problem().sample_factored(s,a,p.first);
             float cost = problem().cost(s, a);
 
-            std::cout << " count=" << it->second.counts_[0]-1
-                      << " fetch " << std::setprecision(5) << it->second.values_[1+a]
-                      << " a=" << a
-                      << " next=" << p.first
-                      << std::endl;
+            if (all_debug) {
+              std::cout << " count=" << it->second.counts_[0]-1
+                        << " fetch " << std::setprecision(5) << it->second.values_[1+a]
+                        << " a=" << a
+                        << " next=" << p.first
+                        << std::endl;
+            }
             
-            float new_value = cost + problem().discount() * search_tree(p.first, 1 + depth);  
+            float new_value = cost + problem().discount() * search_tree(p.first, 1 + depth, all_debug);
             int n;
 
             if(!inverse_SA_.count(std::make_pair(std::make_pair(depth,s),a))) {
@@ -882,15 +914,17 @@ namespace Online {
                 //std::cout<<"Abstracted State:"<<state<<"\n";
               }
 
-              float par=-fabs(masterValue);
+              float par = 5.0; // -fabs(masterValue);
               // float bonus = add_bonus ? par * sqrtf(2 * log_ns / masterCount) : 0;
               float bonus = add_bonus ? par * sqrt(log_ns / masterCount) : 0;
               float value = masterValue + bonus;
 
+              /*
               cout << " par " << par
                    << " bonus " << bonus
                    << " masterV " << masterValue
                    << " value " << value << endl;
+              */
 
               // update best action so far
               if( value <= best_value ) {
