@@ -173,6 +173,7 @@ namespace Online {
         virtual ~uct_t() { }
 
         std::string sapair2str(const state_action_pair_& sapair) const {
+          // depth:state w/action
           std::stringstream fs;
           fs << sapair.first.first << ":"
              << sapair.first.second << "w/"
@@ -180,41 +181,80 @@ namespace Online {
           return fs.str();
         }
 
+        /* Debug printing */
+        void debug_table_simple() const {
+          cout << "UCT TREE" << endl;
+          for(int d = 0; d <= horizon_; ++d) {
+            cout << d << ":";
+            for (typename hash_t<T>::const_iterator it = table_.begin();
+                 it != table_.end(); ++it) {
+              if (it->first.first == d) {
+                cout << it->first.second << "";
+              }
+            }
+            cout << endl;
+          }
+        }
+
+        void debug_table() const {
+          cout << "\x1b[3;36;47m" << "Traversing TABLE" << "\x1b[0m" << endl << endl;
+          for (int d = 0; d < horizon_; ++d) {
+            for (auto kv : table_) {
+              auto depth = kv.first.first;
+              if (depth != d)
+                continue;
+              auto state = kv.first.second;
+              auto counts = kv.second.counts_;
+              auto values = kv.second.values_;
+
+              cout << depth << "@" << state << endl;
+              auto num = counts.size();
+              for (int j = 0; j < num; ++j) {
+                if (j == 0) {
+                  cout << "\t" << "visits:" << counts[j] << endl;
+                } else {
+                  cout << "\t" << j << ":" << counts[j] << " " << values[j] << endl;
+                }
+              }
+            }
+          }
+        }
+
+        void debug_abstract_data() const {
+          /* Debug Table (abstract data) */
+          cout << endl << "\x1b[3;36;47m" << "Traversing Abstract Data" << "\x1b[0m" << endl;
+          for (auto kv : SA_abstract_data_) {
+            cout << sapair2str(kv.first) << " "
+                 << kv.second.first << "," << kv.second.second << endl;
+          }
+          cout << endl;
+        }
+
         virtual Problem::action_t operator()(const T &s) const {
           ++policy_t<T>::decisions_;
      
           table_.clear();
       
-          unsigned l=parameter_;
+          unsigned l = parameter_;
+          bool flag = true;
 
           // Lots of comments removed here
           unsigned this_decision_width=width_;
           double start_time,end_time, abs_start_time;
           start_time= Utils::my_read_time_in_milli_seconds();
           for (unsigned m = 0; m < l; ++m) {
-            cout << "M" << m << endl;
-            cout << endl << endl;
+            if (flag) { cout << endl << "Patch " << m << endl; }
             for( unsigned i = 0; i <this_decision_width/l; ++i ) {
-              cout << "Begin " << i << "-th Search Tree" << endl;
-              // search_tree(s, 0, false);
-              search_tree(s, 0, true);
+              if (flag) { cout << " Trajectory " << i << endl; }
+              search_tree(s, 0, flag);
             }
+            if (m == 1)
+              debug_abstract_data();
             end_time= Utils::my_read_time_in_milli_seconds();
 
-            // std::cout << "STATE:" << s << " ACTION:" << action << std::endl;
-            std::cout << "UCT TREE :-" << std::endl;
-            for(int d = 0; d <= horizon_; ++d) {
-              std::cout << d << ":";
-              for(typename hash_t<T>::const_iterator it = table_.begin();
-                  it != table_.end(); ++it ) {
-                if(it->first.first == d) {
-                  std::cout << it->first.second << "";
-                }
-              }
-              cout << endl;
-            }
+            debug_table_simple();
 			   
-            update_original_nodes();
+            update_original_nodes(m == l-1);
             abstract_to_ground_.clear();          
             SA_abstract_to_ground_.clear();
             inverse_SA_.clear();
@@ -224,10 +264,9 @@ namespace Online {
             abs_start_time= Utils::my_read_time_in_milli_seconds();
 			
             if (m!=l-1) {
-              construct_abstract_tree(s);
+              construct_abstract_tree();
               update_data_values();
             }
-            exit(-1);
           }
            
           end_time= Utils::my_read_time_in_milli_seconds();
@@ -240,6 +279,7 @@ namespace Online {
           assert(problem().applicable(s, action));
 
           // cout << endl;
+          cout << "ACTION " << action << endl;
           exit(-1);
           return action;
         }
@@ -270,7 +310,9 @@ namespace Online {
         }
 
         /*SAU Checks if a state has an unsampled action */
-        bool isUndersampledState(const T &s, unsigned depth) const{
+        bool isUndersampledState(const T &s,
+                                 unsigned depth,
+                                 bool flag = false) const{
           typename hash_t<T>::iterator it = table_.find(std::make_pair(depth, s));
           int num_applicable_actions=0;
           int nactions = problem().number_actions(s);
@@ -289,60 +331,22 @@ namespace Online {
         }
 
 
-        bool areStatesEquivalent (const T &s1, const T &s2, unsigned depth)const{
-          int nactions=problem().number_actions(s1);
-    
-          std::map<state_action_pair_,int> match;
-          state_action_pair_ SA1,SA2;
-          typename std::map<state_action_pair_,int>::iterator matchIt;
-          for(unsigned i=0;i<nactions;i++)
-          {
-            if(problem().applicable(s1,i))
-            {
-              SA1=std::make_pair(std::make_pair(depth,s1),i);
-              state_action_pair_ absPair=inverse_SA_[SA1];
-              matchIt=match.find(absPair);
-              if(matchIt!=match.end())
-                matchIt->second++;
-              else
-                match.insert(std::make_pair(absPair,1));
-            }
+        void update_inverse_state_map(unsigned currentDepth,
+                                      bool flag = false) const {
+          if (flag) {
+            cout << "   [Update Inv. State Map] " << endl;
           }
-          for(unsigned i=0;i<nactions;i++)
-          {
-            if(problem().applicable(s2,i))
-            {
-              SA2=std::make_pair(std::make_pair(depth,s2),i);
-              state_action_pair_ absPair=inverse_SA_[SA2];
-              matchIt=match.find(absPair);
-              if(matchIt!=match.end())
-                if(matchIt->second==1)
-                  match.erase(matchIt);
-                else 
-                  matchIt->second--;
-              else
-                return false;
-            }
-          }
-          if(match.empty())
-            return true;
-          else
-            return false;
-
-        }
-
-
-        void update_inverse_state_map( unsigned currentDepth) const {
-          cout << "   [Update Inv. State Map] " << endl;
           unsigned abstractDepth;
           T abstractState;
 
           // mutable std::map<tree_node_, std::vector<tree_node_>> abstract_to_ground_;
-          for (auto kv : abstract_to_ground_) {
-            cout << " input " << kv.first.first << "," << kv.first.second << endl;
-            cout << "\t";
-            for (auto tn : kv.second) {
-              cout << tn.first << "," << tn.second;
+          if (flag) {
+            for (auto kv : abstract_to_ground_) {
+              cout << " input " << kv.first.first << "," << kv.first.second << endl;
+              cout << "\t";
+              for (auto tn : kv.second) {
+                cout << tn.first << "," << tn.second;
+              }
             }
           }
           
@@ -350,28 +354,43 @@ namespace Online {
           for (rgit = abstract_to_ground_.rbegin(); rgit != abstract_to_ground_.rend(); ++rgit) {
             abstractDepth=(rgit->first).first;
             abstractState=(rgit->first).second;
+            if (flag) {
+              cout << " adepth " << abstractDepth << ", astate " << abstractState << endl;
+            }
+            
             if (abstractDepth==currentDepth+1){
               std::vector<tree_node_> nextDepthVector=rgit->second;
-              for (unsigned j=0; j< nextDepthVector.size(); j++)
+              for (unsigned j=0; j< nextDepthVector.size(); j++) {
+                if (flag) {
+                  cout << "temp inv. state map: " << endl;
+                }
                 temp_inverse_state_map.insert(std::pair<T,T>(nextDepthVector[j].second,abstractState));
+              }
             }
             else if (abstractDepth<currentDepth+1)
               break;
           }
-          cout << "   [End Update Inv. State Map] " << endl;
         }
 
     
         bool isEquivalentSA1(state_action_pair_ currentSApair,
-                             state_action_pair_ abstractSApair) const{
+                             state_action_pair_ abstractSApair,
+                             bool flag = false) const{
+
+          cout << endl << "\x1b[094m" << "isEquivalentSA1 debug" << "\x1b[0m" << endl;
 
           auto s1 = currentSApair.first.second;
           auto a1 = currentSApair.second;
+          auto r1 = problem().cost(s1, a1);
           auto s2 = abstractSApair.first.second;
           auto a2 = abstractSApair.second;
+          auto r2 = problem().cost(s2, a2);
 
-          
-          if (problem().cost(s1, a1) != problem().cost(s2, a2))
+          if (flag) {
+            cout << s1 << "," << a1 << "," << r1 << endl;
+            cout << s2 << "," << a2 << "," << r2 << endl;
+          }
+          if (r1 != r2)
             return false;
 
           std::map<T,float> Map1;
@@ -380,11 +399,24 @@ namespace Online {
           Map1 = SuperMap[currentSApair];
           Map2 = SuperMap[abstractSApair];
 
+          if (flag) {
+            for (auto kv : Map1) {
+              cout << (kv.first) << "," << kv.second << endl;
+            }
+            for (auto kv : SuperMap[abstractSApair]) {
+              cout << (kv.first) << "," << kv.second << endl;
+            }
+          }
+
           typename std::map<T,float> ::iterator m1;
           for (m1=Map1.begin();m1!=Map1.end();m1++) {
             // cout << " m1 " << m1->first << ":" << m1->second << endl;
             if (Map2.find(m1->first)!=Map2.end()) {
-              if(fabs(Map2[m1->first]-(m1->second))>0.0) {
+              auto f = fabs(Map2[m1->first]-(m1->second));
+              if (flag) {
+                cout << f << endl;
+              }
+              if (f) {
                 return false;
               } else {
                 Map2.erase(m1->first);
@@ -393,11 +425,16 @@ namespace Online {
               return false;
             }
           }
+          if (flag) {
+            cout << Map2.size() << endl;
+          }
           return Map2.empty();
         }
     
 
         T get_equivalent_abstractState(const T &s, unsigned depth)const{
+          cout << "[Get Equiv. Abst. State]" << endl;
+          
           int nactions = problem().number_actions(s);
           innerStateMap tempMap;
           typename innerStateMap::iterator itInnerStateMap;
@@ -429,21 +466,21 @@ namespace Online {
 
           
           auto it = revStateSuperMap.find(tempMap);
-          // typename std::map<innerStateMap,T>::iterator tempIt;
-          // tempIt=revStateSuperMap.find(tempMap);
           if (it != revStateSuperMap.end()) {
             cout << " found " << endl;
+            cout << endl;
             return it->second;
           } else {
             cout << " new state S " << endl;
+            cout << endl;
             revStateSuperMap.insert(std::make_pair(tempMap, s));
+            return s;
           }
-          return s;
         }
 
 
         state_action_pair_ get_equivalent_abstractSApair (state_action_pair_ currentSApair) const {
-          cout << "   [Get Equiv. Abst SAPair] " << sapair2str(currentSApair) << endl;
+          cout << "[Get Equiv. Abst SAPair] " << sapair2str(currentSApair) << endl;
           
           T currentState = (currentSApair.first).second;
           bool isEquiv = false;     
@@ -467,21 +504,33 @@ namespace Online {
             break;
           }
 
-          if (isEquiv)
+          if (isEquiv) {
+            cout << " exists: " << sapair2str(abstractSApair) << endl;
             return abstractSApair;
-          else
+          } else {
+            cout << " new   : " << sapair2str(currentSApair) << endl;
             return currentSApair;
+          }
         }
 
-        void calculate_abs_trans_probs(state_action_pair_ currentSApair) const {
-          bool debug_flag = false;
-          cout << "   [Calculate Abs. Trans. Prob.]" << endl;
+        void calculate_abs_trans_probs(state_action_pair_ currentSApair,
+                                       bool debug_flag = false) const {
+          if (debug_flag) {
+            cout << "[Calculate Abs. Trans. Prob.]" << endl;
+          }
 
           std::map<T, float> temp_trans_map;
           temp_trans_map.clear();
           typename std::map<T,float>::iterator transIter;
           float transition_prob;
           T temp_outcome_node;
+
+          if (debug_flag) {
+            cout << "  Temp inv. smap " << endl;
+            for (auto kv : temp_inverse_state_map) {
+              cout << "\t" << kv.first << ":" << kv.second << endl;
+            }
+          }
         
           auto map_it = temp_inverse_state_map.begin();
           float prob_max=-1;
@@ -489,6 +538,15 @@ namespace Online {
             transition_prob = problem().calculate_transition(currentSApair.first.second,
                                                              map_it->first,
                                                              currentSApair.second);
+
+            /*
+            if (debug_flag) {
+              cout << " TP from " << currentSApair.first.second << " to "
+                   << map_it->first << " by "
+                   << currentSApair.second << "=" << transition_prob << endl;
+            }
+            */
+            
             if(transition_prob > prob_max) {
               prob_max = transition_prob;
             }
@@ -500,12 +558,6 @@ namespace Online {
                                                              map_it->first,
                                                              currentSApair.second);
 
-            if (debug_flag) {
-              cout << " TP from " << currentSApair.first.second << " to "
-                   << map_it->first << " by "
-                   << currentSApair.second << "=" << transition_prob << endl;
-            }
-            
             if(transition_prob < ALPHA * prob_max) {
               // cout << " -- alpha " << endl;
               continue;
@@ -513,7 +565,10 @@ namespace Online {
             temp_outcome_node = map_it->second;
 
             if (debug_flag) {
-              cout << "    outcome node " << temp_outcome_node << endl;
+              cout << " TP from " << currentSApair.first.second << " to "
+                   << map_it->first << " by "
+                   << currentSApair.second << "=" << transition_prob
+                   << " / outcome " << temp_outcome_node << endl;
             }
             
             transIter = temp_trans_map.find(temp_outcome_node);
@@ -524,7 +579,7 @@ namespace Online {
             else {
               transIter->second += transition_prob;
             }
-            std::map<T,float> temp_trans_map;
+            // std::map<T,float> temp_trans_map;
           }
 
           SuperMap.insert(std::make_pair(currentSApair, temp_trans_map));
@@ -536,6 +591,7 @@ namespace Online {
               cout << " --> " << tv.first << " w/" << tv.second << endl;
             }
           }
+          cout << endl;
         }
 
         /* debug SA pair */
@@ -543,7 +599,7 @@ namespace Online {
           // std::map<state_action_pair_,std::vector<state_action_pair_>> SA_abstract_to_ground_;
           // std::map<state_action_pair_,state_action_pair_> inverse_SA_;
           // std::vector<state_action_pair_> temp_abs_SA;
-          cout << "[[[DEBUG SA]]]" << endl;
+          cout << endl << "\x1b[3;36;47m" << "DEBUG SA" << "\x1b[0m" << endl;
           for (auto kv : SA_abstract_to_ground_) {
             cout << sapair2str(kv.first) << endl;
             for (auto pair : kv.second) {
@@ -558,13 +614,13 @@ namespace Online {
           for (auto kv : temp_abs_SA) {
             cout << " ++: " << sapair2str(kv) << endl;
           }
-          cout << "--------------" << endl;
+          cout << endl << "\x1b[3;36;47m" << "----------------------" << "\x1b[0m" << endl;
           return;
         }
         
         
         /* SAU Function to compute abstractions */
-        void construct_abstract_tree(const T &s) const {
+        void construct_abstract_tree() const {
 
           cout << "[Abstraction]" << endl;
 
@@ -600,12 +656,23 @@ namespace Online {
             unsigned currentDepth=(rit->first).first;
             T currentState=(rit->first).second;
 
-            cout << "DEPTH:" << currentDepth << " state " << currentState << endl;
-            
             if (currentDepth != oldDepth) {
+              cout << endl << "\x1b[094m" << "(DEPTH UPDATE)" << "\x1b[0m" << endl;
+
+              
               oldDepth = currentDepth;
               temp_inverse_state_map.clear();
               temp_abs_SA.clear();
+
+              /*
+              cout << endl;
+              cout << " ** debug **" << endl;
+              for (auto kv : temp_inverse_undersampled_state_map) {
+                cout << "\t" << kv.first << " |--> " << kv.second << endl;
+              }
+              cout << endl;
+              */
+              
               temp_inverse_state_map = temp_inverse_undersampled_state_map;
               update_inverse_state_map(currentDepth);
               temp_inverse_undersampled_state_map.clear();
@@ -615,26 +682,33 @@ namespace Online {
               revStateSuperMap.clear();
             }
 
-            if(isUndersampledState(currentState,currentDepth)) {
+            if(isUndersampledState(currentState, currentDepth, false)) {
               if (!flagUndersampled) {
                 repUndersampledNode = currentState;
                 flagUndersampled = true;
               }
               auto pair = std::pair<T, T>(currentState, repUndersampledNode);
               temp_inverse_undersampled_state_map.insert(pair);
-              cout << " under sampled: " << currentState << " --> " << repUndersampledNode << endl;
+              cout << " [US] DEPTH: " << currentDepth << ", state "  << currentState << endl;
+              // " --> " << repUndersampledNode << endl;
             } else {
-              cout << " not-under sampled: " << currentState << endl;
+              cout << " [NS] DEPTH: " << currentDepth << ", state "  << currentState << endl;
+              // cout << " not-under sampled: " << currentState << endl;
               typename std::map<T,T>::iterator t1;
               tree_node_ currentNode = rit->first;
               int nactions=problem().number_actions(currentState);
               T abstractState;
               state_action_pair_ abstractSApair;
 
+              cout << "\n current tree node " << currentNode.first << "," << currentNode.second << endl;
+
               // Building Action mapping
               for (Problem::action_t a = 0; a < nactions; a++) {
                 if(problem().applicable(currentState, a)) {
                   state_action_pair_ currentSApair(std::make_pair(currentNode,a));
+
+                  cout << " - current sa " << sapair2str(currentSApair) << endl;
+                  
                   calculate_abs_trans_probs(currentSApair);
 
                   state_action_pair_ answer = get_equivalent_abstractSApair(currentSApair);
@@ -644,10 +718,21 @@ namespace Online {
 
                   if (action_map_it != SA_abstract_to_ground_.end()) {
                     abstractSApair = action_map_it->first;
+                    cout << " found: " << sapair2str(abstractSApair) << endl;
                     auto inv_pair = std::pair<SAp_, SAp_>(currentSApair, abstractSApair);
                     inverse_SA_.insert(inv_pair);
-                    cout << " found abstraction SAp " << sapair2str(abstractSApair) << endl;
                     action_map_it->second.push_back(currentSApair);
+
+                    // debug
+                    /*
+                    for (auto kv : SuperMap) {
+                      cout << sapair2str(kv.first) << ":";
+                      for (auto kvv : kv.second) {
+                        cout << kvv.first << ":" << kvv.second << ",";
+                      }
+                      cout << endl;
+                    }
+                    */
                   } else {
                     /* update */
                     auto inv_pair = std::pair<SAp_, SAp_>(currentSApair, currentSApair);
@@ -670,19 +755,25 @@ namespace Online {
               tree_node_ absRepNode(std::make_pair(currentDepth, abstractState));
               auto state_it = abstract_to_ground_.find(absRepNode);
               if (state_it != abstract_to_ground_.end()) {
+                cout << " update " << currentDepth << ":" << abstractState << endl;
                 (state_it->second).push_back(absRepNode);
               } else {
-                std::vector<tree_node_> groundStateVector(1, absRepNode);                  
+                std::vector<tree_node_> groundStateVector(1, absRepNode);
+                cout << " new node " << currentDepth << ":" << abstractState << endl;
                 abstract_to_ground_.insert(std::make_pair(absRepNode,groundStateVector));
               }
             }
           }
-   
+          cout << endl << "\x1b[3;36;47m" << "End of Traversing orderedMap" << "\x1b[0m" << endl << endl;
         }
 
 	// get the sum of elements of vector
-        int getTotalCount(const T &s, unsigned depth, const std::vector<int>& count_array ) const{
-          cout << "[getTotalCount]" << endl;
+        int getTotalCount(const T &s, unsigned depth,
+                          const std::vector<int>& count_array,
+                          const bool flag = false) const{
+          if (flag) {
+            cout << "[getTotalCount]" << endl;
+          }
           int sum_of_elems=0;
           int nactions = problem().number_actions(s);
           typename hash_t<T>::iterator it;
@@ -695,27 +786,36 @@ namespace Online {
               if(invIt!=inverse_SA_.end()) {
                 typename std::map<state_action_pair_,std::pair<int,float>> ::iterator data_it;
                 data_it=SA_abstract_data_.find(invIt->second);
-                cout << "  - [App] d " << depth
-                     << " state " << s << " action " << a << "  data: " << data_it->second.first << endl;
+                if (flag) {
+                  cout << "  - [Abs] d " << depth
+                       << " state " << s << " action " << a
+                       << "  data: " << data_it->second.first << endl;
+                }
                 sum_of_elems += data_it->second.first;
               } else {
-                cout << "  - [App] d " << depth
-                     << " state " << s << " action " << a << " count: " << count_array[1+a] << endl;
+                if (flag) {
+                  cout << "  - [App] d " << depth
+                       << " state " << s << " action " << a
+                       << " count: " << count_array[1+a] << endl;
+                }
                 sum_of_elems += count_array[1+a];
               }
             }
           }
 
-          cout << "[End of getTotalCount=" << sum_of_elems << "]" << endl;
+          if (flag) {
+            cout << "[End of getTotalCount=" << sum_of_elems << "]" << endl;
+          }
           return sum_of_elems;
-
         }
 
         /* v2 addition: Updates Data Values of true nodes as
            per the value of the corresponding abstract node*/
         // std::map<state_action_pair_, std::vector<state_action_pair_>> SA_abstract_to_ground_;
-        void update_data_values() const {
-          cout << "(Update Data Values)" << endl;
+        void update_data_values(bool flag = false) const {
+          if (flag) {
+            cout << "(Update Data Values)" << endl;
+          }
           typename hash_t<T>::iterator it;
           typename std::map<state_action_pair_,std::vector<state_action_pair_>>::iterator actit;
           typename std::vector<state_action_pair_>::iterator vec_act_it;
@@ -729,7 +829,9 @@ namespace Online {
             avg_values = 0;
             total_count = 0;
 
-            cout << " && Iteration over " << sapair2str(actit->first) << endl;
+            if (flag) {
+              cout << " && Iteration over " << sapair2str(actit->first) << endl;
+            }
             
             for(vec_act_it=actit->second.begin();
                 vec_act_it!=actit->second.end(); ++vec_act_it) {
@@ -738,36 +840,52 @@ namespace Online {
               it = table_.find(vec_act_it->first);
               auto c = it->second.counts_[1 + vec_act_it->second];
               auto v = it->second.values_[1 + vec_act_it->second];
-              cout << "   map " << sapair2str(*vec_act_it) << ": count " << c << ", value " << v << endl;
+
+              if (flag) {
+                cout << "   map " << sapair2str(*vec_act_it)
+                     << ": count " << c << ", value " << v << endl;
+              }
                 
               if(actit->second.size()!=1) {
                 // cout << " multiple map " << endl;
-                avg_values += it->second.counts_[1+vec_act_it->second]*it->second.values_[1+vec_act_it->second];
+                avg_values += c * v;
               } else {
                 // cout << " singleton map " << endl;
-                avg_values += it->second.values_[1+vec_act_it->second];
+                avg_values += v;
               }
-              total_count += (it->second).counts_[1+vec_act_it->second];
+              total_count += c;
             }    
             if (actit->second.size()!=1) {
               // weighted average
+              // cout << "** " << avg_values << ", " << total_count << endl;
               avg_values/=total_count;
+              // cout << "** " << avg_values << endl;
             }
-            cout << "  && TC " << total_count << ", size " << actit->second.size() << endl;
+            // cout << "  && TC " << total_count << ", size " << actit->second.size() << endl;
             total_count = (int)(total_count/actit->second.size());
-            cout << "  && adj TC " << total_count << endl;
+            // cout << "  && adj TC " << total_count << endl;
             Pair_IF pif = std::make_pair(total_count, avg_values);
             SA_abstract_data_.insert(std::pair<state_action_pair_, Pair_IF>(actit->first, pif));
-            cout << "  && STORE: " << sapair2str(actit->first) << ":" << total_count << "," << avg_values << endl;
-          } 
+            cout << "  && STORE: " << sapair2str(actit->first) << ":"
+                 << total_count << "," << avg_values << endl;
+          }
+
+          cout << endl;
+
+
+          debug_abstract_data();
         }
 
-        void update_original_nodes()const{
-          cout << "[Update Original Nodes]" << endl;
+        void update_original_nodes(bool flag = false) const {
+          if (flag) { cout << "[Update Original Nodes]" << endl; }
+          
           typename std::map <state_action_pair_, VecSAp_>::reverse_iterator rgit;
           typename std::map <state_action_pair_, Pair_IF>::iterator abit;
           typename std::vector<state_action_pair_>::iterator vecit;
           typename hash_t<T>::iterator it;
+
+          // debug SA_abstract_data_
+          debug_abstract_data();
 
           for (rgit =SA_abstract_to_ground_ .rbegin();
                rgit != SA_abstract_to_ground_.rend(); ++rgit){
@@ -782,14 +900,8 @@ namespace Online {
               it = table_.find(std::make_pair(vecit->first.first, vecit->first.second));
               it->second.counts_[1+vecit->second]=abit->second.first;
               it->second.values_[1+vecit->second]=abit->second.second;
-
-              auto c1 = it->second.counts_[1+vecit->second];
-              auto c2 = abit->second.first;
-              auto v1 = it->second.values_[1+vecit->second];
-              auto v2 = abit->second.second;
-              
-              cout << "   update: " << c1 << ", " << c2 << endl;
-              cout << "   update: " << v1 << ", " << v2 << endl;
+              cout << "   - abit: " << sapair2str(abit->first)
+                   << ": " << abit->second.first << "," << abit->second.second << endl;
             }
           }
           cout << "[End Update Original Nodes]" << endl << endl;
@@ -816,11 +928,12 @@ namespace Online {
 
             float value = evaluate(s, depth);
             if (all_debug) {
-              std::cout << " insert " << s << " in tree w/ value=" << value << std::endl;
+              std::cout << " insert " << s << " w/ value=" << value << std::endl;
             }
             return value;
           } else {
-            Problem::action_t a = select_action(s, it->second, depth, true, random_ties_);
+            Problem::action_t a = select_action(s, it->second, depth,
+                                                true, random_ties_);
 
             // sample next state
             //std::pair<const T, bool> p = problem().sample(s, a);
@@ -830,13 +943,15 @@ namespace Online {
 
             if (all_debug) {
               std::cout << " count=" << it->second.counts_[0]-1
+                        << " @ " << s
                         << " fetch " << std::setprecision(5) << it->second.values_[1+a]
                         << " a=" << a
                         << " next=" << p.first
                         << std::endl;
             }
-            
-            float new_value = cost + problem().discount() * search_tree(p.first, 1 + depth, all_debug);
+
+            auto disc = problem().discount();
+            float new_value = cost + disc * search_tree(p.first, 1 + depth, all_debug);
             int n;
 
             if(!inverse_SA_.count(std::make_pair(std::make_pair(depth,s),a))) {
@@ -856,11 +971,21 @@ namespace Online {
             } else {
               typename std::map<state_action_pair_,std::pair<int,float>> ::iterator data_it;
               data_it=SA_abstract_data_.find(inverse_SA_[std::make_pair(std::make_pair(depth,s),a)]);
+
+              if (false) {
+                cout << s << ", Idx X @ " << depth << ":" << new_value << endl;
+                cout << "OLD:" << data_it->second.first << "," << data_it->second.second << endl;
+                cout << "newV: " << new_value << endl;
+              }
+              
+              
               ++data_it->second.first;
               float &old_value=data_it->second.second;
-              n= data_it->second.first;
+              n = data_it->second.first;
                         
               old_value += (new_value - old_value) / n;
+
+              // cout << "NEW: " << data_it->second.first << "," << data_it->second.second << endl;
 
               return new_value; //old_value; 
             }   
@@ -872,7 +997,8 @@ namespace Online {
                                         const data_t &data,
                                         int depth,
                                         bool add_bonus,
-                                        bool random_ties) const {
+                                        bool random_ties,
+                                        bool all_debug = false) const {
        
         
           
@@ -889,7 +1015,8 @@ namespace Online {
             }
           }
 
-          float log_ns=logf(getTotalCount(state, depth, data.counts_));
+          auto ns = getTotalCount(state, depth, data.counts_);
+          float log_ns = logf(ns);
           std::vector<Problem::action_t> best_actions;
           best_actions.reserve(random_ties ? nactions : 1);
 
@@ -918,14 +1045,22 @@ namespace Online {
               invIt=inverse_SA_.find(std::make_pair(std::make_pair(depth,state),a));
               if(invIt == inverse_SA_.end()) {
                 masterCount = data.counts_[1+a];
-                masterValue = data.values_[1+a];    
-                //std::cout<<"Unabstracted State:"<<state<<"\n";
+                masterValue = data.values_[1+a];
+                if (all_debug) {
+                  std::cout << "Unabstracted State:" << state << " action " << a
+                            << " count " << masterCount << " value " << masterValue
+                            << " ns " << ns << endl;
+                }
               } else {
                 typename std::map<state_action_pair_,std::pair<int,float>>::iterator data_it;
                 data_it = SA_abstract_data_.find(invIt->second);
                 masterCount = data_it->second.first;
                 masterValue = data_it->second.second;
-                //std::cout<<"Abstracted State:"<<state<<"\n";
+                if (all_debug) {
+                  std::cout << "Abstracted State:" << state << " action " << a
+                            << " count " << masterCount << " value " << masterValue
+                            << " ns " << ns << endl;
+                }
               }
 
               float par = 5.0; // -fabs(masterValue);
@@ -934,7 +1069,7 @@ namespace Online {
               float value = masterValue + bonus;
 
 
-              if (false) {
+              if (all_debug) {
                 cout << " par " << par
                      << " bonus " << bonus
                      << " masterV " << masterValue
@@ -953,7 +1088,8 @@ namespace Online {
             }         
           }
           assert(!best_actions.empty());
-          return best_actions[Random::uniform(best_actions.size())];
+          // return best_actions[Random::uniform(best_actions.size())];
+          return best_actions[0];
         }
 
         void printAbstractMap() const {
